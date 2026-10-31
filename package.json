@@ -1,26 +1,26 @@
 {
-  "name": "codex-multi-user-demo",
-  "version": "1.0.0",
-  "private": true,
-  "main": "src/server.js",
-  "scripts": {
-    "start": "node src/server.js",
-    "worker": "node src/worker.js",
-    "central": "node scripts/central-terminal.js",
-    "user": "node scripts/user-terminal.js",
-    "demo": "node scripts/demo-three-tasks.js"
-  },
-  "engines": {
-    "node": ">=18"
-  },
-  "dependencies": {
-    "bullmq": "^5.58.5",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "ioredis": "^5.6.1",
-    "mongoose": "^8.18.0",
-    "socket.io": "^4.8.1",
-    "socket.io-client": "^4.8.1"
-  }
+    "name": "codex-multi-user-demo",
+    "version": "1.0.0",
+    "private": true,
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "worker": "node src/worker.js",
+        "central": "node scripts/central-terminal.js",
+        "user": "node scripts/user-terminal.js",
+        "demo": "node scripts/demo-three-tasks.js"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "dependencies": {
+        "bullmq": "^5.58.5",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
+        "express": "^4.21.2",
+        "ioredis": "^5.6.1",
+        "mongoose": "^8.18.0",
+        "socket.io": "^4.8.1",
+        "socket.io-client": "^4.8.1"
+    }
 }

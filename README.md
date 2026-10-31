@@ -151,3 +151,47 @@ Output events contain `taskId`, `userId`, `prompt`, `stream`, `chunk`, and a mon
 
 ## Security limitations
 This is a local demo, not production-ready multi-tenant infrastructure. The `userId` field is only a demo ownership identifier, not authentication. The central terminal and `/api/central/tasks` expose all users' output and must not be exposed publicly. Before exposing it to clients, add real authentication/authorization, rate limits, quotas, audit logs, and stronger workspace/process isolation. Never let an untrusted client choose arbitrary filesystem paths or executable arguments. Codex still uses the machine's local login and sandbox configuration; this demo does not disable sandboxing.
+
+
+# Multiple Server start process
+- cd "/home/bitrix131/Ronak/project demo/codex-multi-demo"
+- redis-server --daemonize yes
+- codex login status
+
+- Terminal 1 — start server/worker + central Codex terminal
+
+- cd "/home/bitrix131/Ronak/project demo/codex-multi-demo"
+
+- nohup node src/server.js > /tmp/codex-server.log 2>&1 &
+nohup node src/worker.js > /tmp/codex-worker.log 2>&1 &
+sleep 2
+
+- node scripts/central-terminal.js --layout sections \
+  --since "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+
+- This terminal shows all tasks with separate sections:
+- [USER-1] [TASK-...] RUNNING
+--------------------------------------------
+Task: Create a Node.js login API
+Codex Response:
+...
+Terminal 2 — user 1
+- cd "/home/bitrix131/Ronak/project demo/codex-multi-demo"
+- node scripts/user-terminal.js --user user-1 --prompt "Create a Node.js login API"
+
+Terminal 3 — user 2
+- cd "/home/bitrix131/Ronak/project demo/codex-multi-demo"
+- node scripts/user-terminal.js --user user-2 --prompt "Create a React dashboard"
+
+Terminal 4 — user 3
+- cd "/home/bitrix131/Ronak/project demo/codex-multi-demo"
+- node scripts/user-terminal.js --user user-3 --prompt "Verify Data-Delete API"
+
+- Start terminals 2, 3, and 4 immediately after terminal 1. MAX_CONCURRENCY=3 in .env allows all three Codex processes to run together.
+
+To check services:
+curl http://127.0.0.1:3030/health
+cat /tmp/codex-server.log
+cat /tmp/codex-worker.log
+Optional: npm run demo starts the central terminal and all three user terminals automatically, but server and worker still need to be running.
+
