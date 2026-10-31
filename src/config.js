@@ -3,7 +3,7 @@ const path = require('path');
 
 module.exports = {
     port: Number(process.env.PORT || 3030),
-    mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/codex_multi_user_demo',
+    mongoUri: process.env.MONGODB_URI || 'mongodb://192.168.0.114:27017,192.168.0.114:27018/codex_multi_demo_central?replicaSet=rs0&readPreference=primary',
     redisUrl: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
     codexBin: process.env.CODEX_BIN || 'codex',
     concurrency: Math.max(1, Number(process.env.MAX_CONCURRENCY || 3)),

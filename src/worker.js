@@ -1,6 +1,7 @@
 const { Worker } = require('bullmq');
 const { spawn } = require('child_process');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const mongoose = require('mongoose');
 const config = require('./config');
@@ -8,6 +9,73 @@ const Task = require('./models/Task');
 const { formatDuration } = require('./estimator');
 const { createRedisConnection } = require('./redis');
 const redis = createRedisConnection();
+
+const CODEX_SESSIONS_DIR = path.join(
+    process.env.CODEX_HOME || path.join(os.homedir(), '.codex'),
+    'sessions'
+);
+
+function findFilesRecursive(dir) {
+    if (!fs.existsSync(dir)) return [];
+
+    let files = [];
+
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const fullPath = path.join(dir, entry.name);
+
+        if (entry.isDirectory()) {
+            files = files.concat(findFilesRecursive(fullPath));
+        } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
+            files.push(fullPath);
+        };
+    };
+
+    return files;
+};
+
+function cleanupCodexSession(threadId) {
+    if (!threadId) {
+        console.log('[Codex Session] Thread ID not found');
+        return false;
+    };
+
+    try {
+        const files = findFilesRecursive(CODEX_SESSIONS_DIR);
+
+        for (const file of files) {
+            try {
+                const firstLine = fs.readFileSync(file, 'utf8')
+                    .split('\n')[0];
+
+                const sessionMeta = JSON.parse(firstLine);
+
+                if (
+                    sessionMeta.type === 'session_meta' &&
+                    sessionMeta.payload?.session_id === threadId
+                ) {
+                    fs.unlinkSync(file);
+
+                    console.log(`[Codex Session Deleted] ${threadId}`);
+
+                    return true;
+                };
+
+            } catch (err) {
+                console.error(
+                    `Session cleanup failed: ${err.message}`
+                );
+            };
+        };
+
+        console.log(`[Codex Session Not Found] ${threadId}`);
+
+        return false;
+
+    } catch (err) {
+        console.error('Codex session cleanup error:', err.message);
+        return false;
+    };
+};
 
 function taskContext(task) {
     return { taskId: task.taskId, userId: task.userId, prompt: task.prompt };
@@ -19,6 +87,7 @@ async function emit(task, type, data) {
 };
 
 async function executeTask(task) {
+    let threadId = null;
     const { taskId } = task;
     const workspacePath = path.join(config.workspacesDir, taskId);
     fs.mkdirSync(workspacePath, { recursive: true });
@@ -66,7 +135,8 @@ async function executeTask(task) {
         const child = spawn(config.codexBin, [
             'exec',
             '--json',
-            '--color', 'never',
+            '--color',
+            'never',
             '--skip-git-repo-check',
             task.prompt
         ], {
@@ -103,6 +173,18 @@ async function executeTask(task) {
             try {
                 const event = JSON.parse(line);
 
+                if (event.type === 'thread.started') {
+                    threadId = event.thread_id;
+                    task.threadId = event.thread_id;
+
+                    Task.updateOne(
+                        { taskId },
+                        { $set: { threadId: event.thread_id } }
+                    ).catch(console.error);
+
+                    console.log(`[Codex Thread Created] ${event.thread_id}`);
+                };
+
                 // Only show Codex final/assistant messages.
                 if (
                     event.type === 'item.completed' &&
@@ -134,10 +216,28 @@ async function executeTask(task) {
 
         child.on('error', async err => {
             if (settled) return;
+
             settled = true;
             clearTimeout(timer);
+
             await outputQueue;
+
+            // Delete only the current task's Codex session
+            console.log("threadId--------->", threadId);
+            const sessionDeleted = threadId ? cleanupCodexSession(threadId, workspacePath) : false;
+            console.log("sessionDeleted--------->", sessionDeleted);
+
+            await Task.updateOne(
+                { taskId },
+                {
+                    $set: {
+                        sessionDeleted,
+                    }
+                }
+            );
+
             const error = `Unable to start Codex CLI: ${err.message}`;
+
             output = (output + '\n' + error + '\n').slice(-config.maxOutputChars);
             seq += 1;
 
@@ -167,7 +267,20 @@ async function executeTask(task) {
 
             await outputQueue;
 
+            // Delete only the current task's Codex session
+            const sessionDeleted = threadId ? cleanupCodexSession(threadId, workspacePath) : false;
+
+            await Task.updateOne(
+                { taskId },
+                {
+                    $set: {
+                        sessionDeleted,
+                    }
+                }
+            );
+
             const status = code === 0 && !timedOut ? 'COMPLETED' : 'FAILED';
+
             const error = timedOut ? `Codex timed out after ${config.codexTimeoutMs}ms.` :
                 (code === 0 ? '' : `Codex exited with code ${code}${signal ? ` (${signal})` : ''}.`);
 

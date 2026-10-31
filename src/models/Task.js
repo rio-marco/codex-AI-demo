@@ -66,6 +66,14 @@ const schema = new mongoose.Schema(
             type: String,
             default: '',
         },
+        threadId: {
+            type: String,
+            default: null
+        },
+        sessionDeleted: {
+            type: Boolean,
+            default: false
+        },
         startedAt: {
             type: Date,
             default: null,
